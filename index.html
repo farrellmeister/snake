@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<title>Snake</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; overflow: hidden; overscroll-behavior: none; touch-action: none; }
+  body {
+    background: #12100c;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    font-family: "Courier New", monospace; color: #9bb800;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+  #frame {
+    background: #6e8c00;
+    border-radius: 14px;
+    padding: 10px;
+    box-shadow: inset 0 0 0 2px #7d9900, 0 6px 24px rgba(0,0,0,.6);
+  }
+  #screen {
+    background: #9bbc0f;
+    border-radius: 4px;
+    display: block;
+    image-rendering: pixelated;
+  }
+  #bar {
+    width: 100%; max-width: 400px;
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 8px; font-weight: bold; font-size: 14px;
+    color: #b8d43a; text-shadow: 0 1px 0 #000;
+  }
+  #help {
+    margin-top: 10px; font-size: 11px; color: #7a8a4a; text-align: center; line-height: 1.5;
+  }
+  button {
+    font-family: inherit; font-weight: bold; font-size: 15px;
+    background: #6e8c00; color: #d8f05a; border: none; border-radius: 6px;
+    padding: 12px 20px; cursor: pointer; display: none;
+  }
+  button:active { background: #86a800; }
+</style>
+</head>
+<body>
+<div id="bar"><span id="score">0</span><span>SNAKE II</span><span id="hi">HI 0</span></div>
+<div id="frame"><canvas id="screen" width="200" height="300"></canvas></div>
+<button id="startBtn">&#9654; Start</button>
+<div id="help">Swipe anywhere to steer.<br>Space or tap to pause / restart.</div>
+<script>
+(function () {
+  var canvas = document.getElementById("screen");
+  var ctx = canvas.getContext("2d");
+  var scoreEl = document.getElementById("score");
+  var hiEl = document.getElementById("hi");
+  var startBtn = document.getElementById("startBtn");
+
+  var COLS = 20, ROWS = 30, CELL = 10;
+  var HI_KEY = "snake_hi";
+  var hi = 0;
+  try { hi = parseInt(localStorage.getItem(HI_KEY) || "0", 10) || 0; } catch (e) {}
+  hiEl.textContent = "HI " + hi;
+
+  var snake, dir, nextDir, food, score, state, timer, speed;
+
+  function reset() {
+    snake = [{x: 10, y: 22}, {x: 9, y: 22}, {x: 8, y: 22}];
+    dir = {x: 1, y: 0}; nextDir = {x: 1, y: 0};
+    food = spawnFood();
+    score = 0; speed = 200;
+    scoreEl.textContent = "0";
+  }
+
+  function spawnFood() {
+    var p;
+    do {
+      p = {x: Math.floor(Math.random() * COLS), y: Math.floor(Math.random() * ROWS)};
+    } while (snake.some(function (s) { return s.x === p.x && s.y === p.y; }));
+    return p;
+  }
+
+  function drawCell(x, y) {
+    ctx.fillRect(x * CELL + 1, y * CELL + 1, CELL - 2, CELL - 2);
+  }
+
+  function draw() {
+    ctx.fillStyle = "#9bbc0f";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "#0f380f";
+    if (food) drawCell(food.x, food.y);
+    for (var i = 0; i < snake.length; i++) drawCell(snake[i].x, snake[i].y);
+  }
+
+  function tick() {
+    dir = nextDir;
+    var head = {x: snake[0].x + dir.x, y: snake[0].y + dir.y};
+
+    // wrap around walls (classic Snake II behaviour)
+    if (head.x < 0) head.x = COLS - 1;
+    if (head.x >= COLS) head.x = 0;
+    if (head.y < 0) head.y = ROWS - 1;
+    if (head.y >= ROWS) head.y = 0;
+
+    for (var i = 0; i < snake.length; i++) {
+      if (snake[i].x === head.x && snake[i].y === head.y) return gameOver();
+    }
+    snake.unshift(head);
+    if (head.x === food.x && head.y === food.y) {
+      score++;
+      scoreEl.textContent = String(score);
+      if (score % 5 === 0 && speed > 70) { speed -= 12; clearInterval(timer); timer = setInterval(tick, speed); }
+      food = spawnFood();
+    } else {
+      snake.pop();
+    }
+    draw();
+  }
+
+  function showMsg(lines) {
+    ctx.fillStyle = "#9bbc0f";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "#0f380f";
+    ctx.font = "bold 14px 'Courier New', monospace";
+    ctx.textAlign = "center";
+    for (var i = 0; i < lines.length; i++) {
+      ctx.fillText(lines[i], canvas.width / 2, 120 + i * 20);
+    }
+  }
+
+  function gameOver() {
+    state = "over";
+    clearInterval(timer);
+    if (score > hi) { hi = score; try { localStorage.setItem(HI_KEY, String(hi)); } catch (e) {} hiEl.textContent = "HI " + hi; }
+    showMsg(["GAME OVER", "Score: " + score, "", "Tap to play again"]);
+    if (navigator.vibrate) navigator.vibrate(80);
+  }
+
+  function start() {
+    reset();
+    state = "play";
+    startBtn.style.display = "none";
+    clearInterval(timer);
+    timer = setInterval(tick, speed);
+    draw();
+  }
+
+  function togglePause() {
+    if (state === "play") {
+      state = "pause";
+      clearInterval(timer);
+      showMsg(["PAUSED", "", "Tap to resume"]);
+    } else if (state === "pause") {
+      state = "play";
+      timer = setInterval(tick, speed);
+      draw();
+    } else if (state === "over") {
+      start();
+    }
+  }
+
+  function steer(dx, dy) {
+    // prevent reversing into yourself
+    if (state !== "play") return;
+    if (dx === -dir.x && dy === -dir.y) return;
+    nextDir = {x: dx, y: dy};
+  }
+
+  // ---- keyboard (desktop) ----
+  document.addEventListener("keydown", function (e) {
+    var k = e.key;
+    if (k === "ArrowUp" || k === "w") steer(0, -1);
+    else if (k === "ArrowDown" || k === "s") steer(0, 1);
+    else if (k === "ArrowLeft" || k === "a") steer(-1, 0);
+    else if (k === "ArrowRight" || k === "d") steer(1, 0);
+    else if (k === " " || k === "Enter") { e.preventDefault(); togglePause(); }
+  });
+
+  // ---- swipe (touch) ----
+  var sx = 0, sy = 0, swiping = false;
+  function onDown(x, y) { sx = x; sy = y; swiping = true; }
+  function onMove(x, y) {
+    if (!swiping) return;
+    var dx = x - sx, dy = y - sy;
+    if (Math.abs(dx) > 24 || Math.abs(dy) > 24) {
+      if (Math.abs(dx) > Math.abs(dy)) steer(dx > 0 ? 1 : -1, 0);
+      else steer(0, dy > 0 ? 1 : -1);
+      sx = x; sy = y; // allow continuous swiping without lifting
+    }
+  }
+  function onUp() { swiping = false; }
+
+  canvas.addEventListener("touchstart", function (e) { e.preventDefault(); var t = e.touches[0]; onDown(t.clientX, t.clientY); }, {passive: false});
+  canvas.addEventListener("touchmove", function (e) { e.preventDefault(); var t = e.touches[0]; onMove(t.clientX, t.clientY); }, {passive: false});
+  canvas.addEventListener("touchend", function (e) { e.preventDefault(); onUp(); if (state !== "play") togglePause(); }, {passive: false});
+
+  canvas.addEventListener("mousedown", function (e) { onDown(e.clientX, e.clientY); });
+  canvas.addEventListener("mousemove", function (e) { onMove(e.clientX, e.clientY); });
+  canvas.addEventListener("mouseup", function () { onUp(); });
+  canvas.addEventListener("click", function () { if (state !== "play") togglePause(); });
+
+  // ---- size canvas to fit small screens ----
+  function fit() {
+    var maxH = window.innerHeight - 140;
+    var maxW = Math.min(window.innerWidth - 30, 400);
+    var scale = Math.min(maxW / canvas.width, maxH / canvas.height);
+    if (scale > 0 && scale < 4) {
+      canvas.style.width = Math.floor(canvas.width * scale) + "px";
+      canvas.style.height = Math.floor(canvas.height * scale) + "px";
+    }
+  }
+  window.addEventListener("resize", fit);
+  fit();
+
+  // ---- attract screen ----
+  state = "over";
+  snake = [{x: 10, y: 22}, {x: 9, y: 22}, {x: 8, y: 22}];
+  food = null;
+  showMsg(["SNAKE II", "", "Tap / swipe", "to play"]);
+  startBtn.style.display = "inline-block";
+  startBtn.addEventListener("click", start);
+})();
+</script>
+</body>
+</html>
